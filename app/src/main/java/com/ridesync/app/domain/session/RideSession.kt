@@ -56,6 +56,9 @@ interface RideSession {
     fun musicSelect(trackId: String)
     fun setMusicVolume(volume: Float)
 
+    /** Host: play an MP3/audio file the user picked from their phone. */
+    fun playLocalMusicFile(uri: String, title: String) {}
+
     // Per-rider local mix
     fun setRiderMuted(riderId: String, muted: Boolean)
     fun setRiderVolume(riderId: String, volume: Float)

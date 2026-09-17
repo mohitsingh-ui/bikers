@@ -180,6 +180,11 @@ class HostSession(
         scope.launch { env.settingsRepository.setMusicVolume(volume) }
     }
 
+    override fun playLocalMusicFile(uri: String, title: String) {
+        music.addAndPlayLocalFile(uri, title)
+        stats.onMusicPlaying(true, System.currentTimeMillis())
+    }
+
     override fun setRiderMuted(riderId: String, muted: Boolean) {
         keyFor(riderId)?.let { voiceEngine.setLocalMute(it, muted) }
     }

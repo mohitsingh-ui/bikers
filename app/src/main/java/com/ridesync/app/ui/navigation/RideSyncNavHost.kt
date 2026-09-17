@@ -232,6 +232,7 @@ fun RideSyncNavHost(
                             if (state.phoneAudioSharing) viewModel.stopPhoneAudioShare()
                             else viewModel.requestPhoneAudioShare()
                         },
+                        onPlayLocalFile = { uri, title -> activeSession?.playLocalMusicFile(uri, title) },
                         onStartRide = { activeSession?.startRide() },
                         onEndRide = { activeSession?.endRide() },
                     )

@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
@@ -185,7 +187,7 @@ fun ShareAudioCard(sharing: Boolean, onToggle: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                androidx.compose.material.icons.Icons.Filled.GraphicEq,
+                Icons.Filled.GraphicEq,
                 contentDescription = null,
                 tint = if (sharing) colors.accent else colors.mutedText,
                 modifier = Modifier.size(22.dp),
@@ -216,6 +218,35 @@ fun ShareAudioCard(sharing: Boolean, onToggle: () -> Unit) {
             style = MaterialTheme.typography.labelMedium,
             color = colors.faintText,
         )
+    }
+}
+
+/**
+ * Host-only card: pick an MP3/audio file from the phone and play it. It plays
+ * through the shared ExoPlayer so it syncs to riders like the built-in tracks,
+ * and — unlike DRM-protected streaming apps — a local file also streams through
+ * "Share phone audio" when that's on.
+ */
+@Composable
+fun PlayFileCard(onPick: () -> Unit) {
+    val colors = RideSyncTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .border(androidx.compose.foundation.BorderStroke(1.dp, colors.cardStroke), shape)
+            .clickable(onClick = onPick)
+            .padding(Space.l),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.LibraryMusic, contentDescription = null, tint = colors.accent, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(Space.m))
+        Column(Modifier.weight(1f)) {
+            Text("Play a file from your phone", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text("Pick an MP3 — it plays in sync on every rider", style = MaterialTheme.typography.bodyMedium, color = colors.mutedText)
+        }
     }
 }
 

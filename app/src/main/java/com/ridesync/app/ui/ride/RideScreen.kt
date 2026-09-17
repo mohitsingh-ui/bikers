@@ -54,11 +54,28 @@ fun RideScreen(
     onOpenVoiceMix: () -> Unit,
     onOpenRideMode: () -> Unit,
     onToggleShareAudio: () -> Unit,
+    onPlayLocalFile: (uri: String, title: String) -> Unit,
     onStartRide: () -> Unit,
     onEndRide: () -> Unit,
 ) {
     val colors = RideSyncTheme.colors
     val micEnabled = state.commMode == CommMode.PUSH_TO_TALK
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val filePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            // OpenDocument (SAF) returns a URI that supports a durable read grant,
+            // so the track keeps playing across config changes / process restore.
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            onPlayLocalFile(uri.toString(), queryDisplayName(context, uri))
+        }
+    }
 
     RideScaffold(
         title = state.ride?.name ?: "Ride",
@@ -140,6 +157,9 @@ fun RideScreen(
             )
 
             if (state.isHost) {
+                Spacer(Modifier.height(Space.m))
+                PlayFileCard(onPick = { filePicker.launch(arrayOf("audio/*")) })
+
                 Spacer(Modifier.height(Space.l))
                 ShareAudioCard(
                     sharing = state.phoneAudioSharing,
@@ -163,4 +183,23 @@ fun RideScreen(
             Spacer(Modifier.height(Space.xxl))
         }
     }
+}
+
+/**
+ * Resolve a human-readable name for a picked content:// audio file so the Now
+ * Playing card and the broadcast title show something friendlier than a URI.
+ * Falls back gracefully if the provider doesn't expose a display name.
+ */
+private fun queryDisplayName(context: android.content.Context, uri: android.net.Uri): String {
+    var name = ""
+    runCatching {
+        context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (idx >= 0) name = cursor.getString(idx) ?: ""
+            }
+        }
+    }
+    if (name.isBlank()) name = uri.lastPathSegment?.substringAfterLast('/') ?: "My music"
+    return name.substringBeforeLast('.').ifBlank { name }
 }

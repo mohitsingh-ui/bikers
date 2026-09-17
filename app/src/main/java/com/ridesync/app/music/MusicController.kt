@@ -180,6 +180,33 @@ class MusicController(
         publishSnapshot()
     }
 
+    /**
+     * Add an MP3 (or other audio file) the host picked from their phone and
+     * play it. It plays on the host immediately; combined with "Share phone
+     * audio" it streams to the other riders too. Its title is broadcast so
+     * everyone at least sees what's playing.
+     */
+    fun addAndPlayLocalFile(uriString: String, title: String) = onMain {
+        val exo = player ?: return@onMain
+        val track = TrackInfo(
+            id = "local:" + uriString.hashCode(),
+            title = title.ifBlank { "My music" },
+            artist = "From your phone",
+            durationMs = 0L,
+            source = TrackSource.LOCAL,
+            uri = uriString,
+        )
+        playlist = playlist + track
+        currentIndex = playlist.size - 1
+        exo.addMediaItem(MediaItem.fromUri(uriString))
+        exo.seekTo(currentIndex, 0)
+        exo.playWhenReady = true
+        exo.prepare()
+        publishSnapshot()
+        updateState()
+        RLog.i(RLog.Cat.MUSIC, "playing local file: $title")
+    }
+
     fun hostResync() = onMain {
         publishSnapshot()
     }
