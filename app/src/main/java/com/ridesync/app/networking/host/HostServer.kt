@@ -99,8 +99,10 @@ class HostServer(
     private val nextKey = AtomicInteger(1)
     private val seq = AtomicLong(0)
 
-    @Volatile var hostBattery: Int? = null
-    @Volatile var hostTalking: Boolean = false
+    // Private backing state (public mutation goes through setHostBattery /
+    // setHostTalking, which also refresh the roster).
+    @Volatile private var hostBatteryValue: Int? = null
+    @Volatile private var hostTalkingValue: Boolean = false
 
     @Volatile
     var rideStarted: Boolean = false
@@ -184,14 +186,14 @@ class HostServer(
         }
     }
 
-    fun updateHostTalking(talking: Boolean) {
-        hostTalking = talking
+    fun setHostTalking(talking: Boolean) {
+        hostTalkingValue = talking
         notifyRoster()
     }
 
-    fun updateHostBattery(percent: Int?) {
-        if (percent != hostBattery) {
-            hostBattery = percent
+    fun setHostBattery(percent: Int?) {
+        if (percent != hostBatteryValue) {
+            hostBatteryValue = percent
             notifyRoster()
         }
     }
@@ -409,6 +411,11 @@ class HostServer(
                 }
 
                 is VoicePackets.Datagram.Voice -> {
+                    // Auto-register the speaker's UDP endpoint from the packet
+                    // source, so relaying works even if the initial HELLO was
+                    // lost (common on flaky Wi-Fi / AP isolation).
+                    handlers.values.firstOrNull { it.key == datagram.senderKey }
+                        ?.let { if (it.voiceEndpoint != from) it.voiceEndpoint = from }
                     // Fast path: relay to everyone except the speaker, then local.
                     for (handler in handlers.values) {
                         if (handler.key == datagram.senderKey) continue
@@ -509,8 +516,8 @@ class HostServer(
             name = config.hostName,
             isHost = true,
             state = RiderState.CONNECTED,
-            batteryPercent = hostBattery,
-            isTalking = hostTalking,
+            batteryPercent = hostBatteryValue,
+            isTalking = hostTalkingValue,
             joinedAtMs = hostJoinedAt,
         )
         val clients = handlers.values

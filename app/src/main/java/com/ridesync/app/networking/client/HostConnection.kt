@@ -127,7 +127,11 @@ class HostConnection(
     }
 
     fun sendControl(message: ControlMessage) {
-        conn?.send(env(message))
+        val connection = conn ?: return
+        val envelope = env(message)
+        // TCP write is blocking, and callers are usually on the UI thread
+        // (PTT, music, alerts). Send off-main to avoid NetworkOnMainThreadException.
+        scope.launch(Dispatchers.IO) { connection.send(envelope) }
     }
 
     /** Encode + send one voice frame to the host for relay. */
@@ -311,10 +315,15 @@ class HostConnection(
     private fun pingClock() {
         val channel = voice ?: return
         val target = endpoint ?: return
+        val dest = InetSocketAddress(target.host, target.voicePort)
         channel.send(
             VoicePackets.encodeClockPing(clockNonce.getAndIncrement(), System.currentTimeMillis()),
-            InetSocketAddress(target.host, target.voicePort),
+            dest,
         )
+        // Re-announce our UDP endpoint alongside every clock ping so the host
+        // keeps a fresh mapping and can relay others' voice to us even if we
+        // haven't transmitted yet (and even if the join-time HELLOs were lost).
+        if (myKey >= 0) channel.send(VoicePackets.encodeHello(myKey), dest)
     }
 
     private fun updateRtt() {

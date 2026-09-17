@@ -133,7 +133,7 @@ class HostSession(
     override fun setPushToTalk(pressed: Boolean) {
         if (_state.value.commMode == CommMode.OPEN_INTERCOM) return
         voiceEngine.setTransmitting(pressed)
-        server.updateHostTalking(pressed)
+        server.setHostTalking(pressed)
         if (pressed) {
             env.haptics.talkStart(); env.tones.talkStart()
             server.broadcast(VoiceStart(riderKey = 0, riderName = config().hostName))
@@ -334,7 +334,7 @@ class HostSession(
                 if (_state.value.phase == RidePhase.RIDING) {
                     _state.value = _state.value.copy(elapsedMs = now - stats.startedAtMs)
                 }
-                server.updateHostBattery(env.battery.currentPercent())
+                server.setHostBattery(env.battery.currentPercent())
                 _state.value = _state.value.copy(
                     connection = ConnectionState(ConnectionQuality.EXCELLENT, 0),
                 )

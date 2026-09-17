@@ -11,6 +11,7 @@ import com.ridesync.app.networking.transport.UdpChannel
 import java.net.InetSocketAddress
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -186,7 +187,8 @@ class RideScanner(
     fun refresh() {
         found.clear()
         publish()
-        probeNow()
+        // Off the UI thread — probeNow() blocks on a socket send.
+        scope.launch(Dispatchers.IO) { probeNow() }
     }
 
     private fun startNsdDiscovery() {
@@ -300,7 +302,9 @@ class RideScanner(
             found[reply.rideId] = ride
             publish()
         }
-        probeJob = scope.launch {
+        // MUST run off the main thread: probeNow() does a blocking socket send,
+        // which throws NetworkOnMainThreadException on the caller's (UI) scope.
+        probeJob = scope.launch(Dispatchers.IO) {
             while (isActive && running) {
                 probeNow()
                 expireStale()
