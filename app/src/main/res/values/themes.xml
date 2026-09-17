@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Base window theme. All real theming happens in Compose. -->
+    <style name="Theme.RideSync" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ridesync_background</item>
+        <item name="android:statusBarColor">@color/ridesync_background</item>
+        <item name="android:navigationBarColor">@color/ridesync_background</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+    </style>
+
+    <!-- Splash: dark charcoal + logo, hands off to Theme.RideSync. -->
+    <style name="Theme.RideSync.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ridesync_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="windowSplashScreenAnimationDuration">400</item>
+        <item name="postSplashScreenTheme">@style/Theme.RideSync</item>
+    </style>
+
+</resources>
