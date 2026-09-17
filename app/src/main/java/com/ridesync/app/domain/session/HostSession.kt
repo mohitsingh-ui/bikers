@@ -85,10 +85,15 @@ class HostSession(
     private val syncSeq = AtomicLong(0)
     private val stats = SessionStats(config.name)
 
-    private val voiceEngine = env.buildVoiceEngine { payload, length, _, _ ->
-        server.relayVoiceFromHost(payload, length)
+    private val voiceEngine = env.buildVoiceEngine { payload, length, _, flags ->
+        server.relayVoiceFromHost(payload, length, flags)
     }
     private val music = env.buildMusicController()
+
+    // Phone-audio sharing (AudioPlaybackCapture). Present only while the host
+    // is streaming its device audio to the riders.
+    private var mediaCapture: com.ridesync.app.audio.MediaStreamCapture? = null
+    private val mediaFrameBytes = ByteArray(com.ridesync.app.audio.VoiceFormat.FRAME_SAMPLES * 2)
 
     private val server = HostServer(
         scope = scope,
@@ -199,6 +204,41 @@ class HostSession(
 
     override fun setRideMode(active: Boolean) {
         _state.value = _state.value.copy(rideModeActive = active)
+    }
+
+    /**
+     * Start streaming the host phone's own audio output to the riders. Each
+     * captured PCM frame is packed to bytes and relayed as a dedicated media
+     * stream. Returns false if capture couldn't start (e.g. below Android 10).
+     */
+    fun startMediaShare(projection: android.media.projection.MediaProjection): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return false
+        stopMediaShare()
+        val capture = com.ridesync.app.audio.MediaStreamCapture(projection) { pcm, samples ->
+            var j = 0
+            val n = samples.coerceAtMost(com.ridesync.app.audio.VoiceFormat.FRAME_SAMPLES)
+            for (i in 0 until n) {
+                val s = pcm[i].toInt()
+                mediaFrameBytes[j++] = (s and 0xFF).toByte()
+                mediaFrameBytes[j++] = (s shr 8 and 0xFF).toByte()
+            }
+            server.relayMediaFromHost(mediaFrameBytes, n * 2)
+        }
+        val ok = capture.start()
+        if (ok) {
+            mediaCapture = capture
+            _state.value = _state.value.copy(phoneAudioSharing = true)
+            _events.tryEmit(SessionEvent.Info("Sharing your phone’s audio"))
+        }
+        return ok
+    }
+
+    fun stopMediaShare() {
+        mediaCapture?.stop()
+        mediaCapture = null
+        if (_state.value.phoneAudioSharing) {
+            _state.value = _state.value.copy(phoneAudioSharing = false)
+        }
     }
 
     override fun startRide() {
@@ -366,6 +406,7 @@ class HostSession(
     private fun shutdown(broadcastEnd: Boolean) {
         tickJob?.cancel()
         duckJob?.cancel()
+        stopMediaShare()
         announcer.stop()
         voiceEngine.stop()
         music.release()

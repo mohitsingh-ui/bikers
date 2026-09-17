@@ -136,6 +136,20 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
         activeSession.value?.sendQuickAlert(kind)
     }
 
+    // Phone audio sharing: the ride screen asks, MainActivity runs the system
+    // media-projection consent dialog, then the service starts capture.
+    private val _audioShareRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val audioShareRequests: kotlinx.coroutines.flow.SharedFlow<Unit> = _audioShareRequests
+
+    fun requestPhoneAudioShare() {
+        _audioShareRequests.tryEmit(Unit)
+    }
+
+    fun stopPhoneAudioShare() {
+        com.ridesync.app.service.RideSessionService.stopAudioCapture(env.appContext)
+        sessionManager.stopPhoneAudioShare()
+    }
+
     override fun onCleared() {
         stopScanning()
         super.onCleared()

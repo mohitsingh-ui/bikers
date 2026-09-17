@@ -53,6 +53,7 @@ fun RideScreen(
     onEmergency: () -> Unit,
     onOpenVoiceMix: () -> Unit,
     onOpenRideMode: () -> Unit,
+    onToggleShareAudio: () -> Unit,
     onStartRide: () -> Unit,
     onEndRide: () -> Unit,
 ) {
@@ -137,6 +138,14 @@ fun RideScreen(
                 onOpenExternal = onOpenExternal,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            if (state.isHost) {
+                Spacer(Modifier.height(Space.l))
+                ShareAudioCard(
+                    sharing = state.phoneAudioSharing,
+                    onToggle = onToggleShareAudio,
+                )
+            }
 
             Spacer(Modifier.height(Space.l))
             EmergencyButton(onTriggered = onEmergency)

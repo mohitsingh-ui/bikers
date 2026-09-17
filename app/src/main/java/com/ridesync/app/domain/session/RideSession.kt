@@ -27,6 +27,7 @@ data class RideState(
     val musicDucked: Boolean = false,
     val elapsedMs: Long = 0L,
     val rideModeActive: Boolean = false,
+    val phoneAudioSharing: Boolean = false,
 ) {
     val self: Rider? get() = riders.firstOrNull { it.id == selfId }
     val isHost: Boolean get() = role == SessionRole.HOST

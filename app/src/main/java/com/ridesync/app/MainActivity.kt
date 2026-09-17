@@ -30,9 +30,22 @@ import com.ridesync.app.ui.theme.RideSyncTheme
 class MainActivity : ComponentActivity() {
 
     private var pendingJoin by mutableStateOf<RideCodes.JoinTarget?>(null)
+    private var pendingShareTitle: String = "RideSync"
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { /* result handled reactively */ }
+
+    private val projectionManager by lazy {
+        getSystemService(android.content.Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+    }
+
+    private val projectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val data = result.data
+            if (result.resultCode == RESULT_OK && data != null) {
+                RideSessionService.startAudioCapture(this, result.resultCode, data, pendingShareTitle)
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -68,6 +81,15 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     RideSessionService.stop(this@MainActivity)
+                }
+            }
+
+            // When the ride screen asks to share phone audio, run the system
+            // media-projection consent dialog.
+            androidx.compose.runtime.LaunchedEffect(Unit) {
+                vm.audioShareRequests.collect {
+                    pendingShareTitle = vm.rideState.value?.ride?.name ?: "RideSync"
+                    runCatching { projectionLauncher.launch(projectionManager.createScreenCaptureIntent()) }
                 }
             }
         }

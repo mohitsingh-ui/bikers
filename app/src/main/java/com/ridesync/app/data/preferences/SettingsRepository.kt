@@ -44,7 +44,7 @@ data class Settings(
     val hostOnlyMusic: Boolean = true,
     val driftSoftMs: Int = 120,
     val driftHardMs: Int = 300,
-    val musicVolume: Float = 0.8f,
+    val musicVolume: Float = 1.0f,
     // Ride
     val defaultRideName: String = "",
     val maxRiders: Int = 4,

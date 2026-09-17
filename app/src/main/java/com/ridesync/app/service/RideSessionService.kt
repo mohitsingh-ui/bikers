@@ -33,11 +33,27 @@ class RideSessionService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    @Volatile
+    private var projectionActive = false
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
                 stopSelfSafely()
                 return START_NOT_STICKY
+            }
+
+            ACTION_START_CAPTURE -> {
+                startAudioCapture(intent)
+            }
+
+            ACTION_STOP_CAPTURE -> {
+                projectionActive = false
+                stopAudioCaptureShare()
+                startForegroundWith(
+                    intent?.getStringExtra(EXTRA_TITLE) ?: "RideSync",
+                    intent?.getStringExtra(EXTRA_TEXT) ?: "Ride in progress",
+                )
             }
 
             else -> {
@@ -48,6 +64,51 @@ class RideSessionService : Service() {
             }
         }
         return START_STICKY
+    }
+
+    /**
+     * Android 14 requires a mediaProjection-typed foreground service to be
+     * running BEFORE the MediaProjection is created, so we do the whole
+     * sequence here inside the service: re-enter foreground with the
+     * mediaProjection type, acquire the projection, then start capture.
+     */
+    private fun startAudioCapture(intent: Intent) {
+        val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, android.app.Activity.RESULT_CANCELED)
+        val resultData: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        }
+        if (resultCode != android.app.Activity.RESULT_OK || resultData == null) return
+
+        projectionActive = true
+        startForegroundWith(
+            intent.getStringExtra(EXTRA_TITLE) ?: "RideSync",
+            "Sharing phone audio with your riders",
+        )
+        acquireLocks()
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            RLog.w(RLog.Cat.MUSIC, "audio capture needs Android 10+")
+            return
+        }
+        try {
+            val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as android.media.projection.MediaProjectionManager
+            val projection = mpm.getMediaProjection(resultCode, resultData) ?: return
+            val app = application as com.ridesync.app.RideSyncApp
+            val ok = app.container.sessionManager.startPhoneAudioShare(projection)
+            if (!ok) RLog.w(RLog.Cat.MUSIC, "no host session to share audio to")
+        } catch (e: Exception) {
+            RLog.e(RLog.Cat.MUSIC, "start audio capture failed", e)
+        }
+    }
+
+    private fun stopAudioCaptureShare() {
+        runCatching {
+            (application as com.ridesync.app.RideSyncApp).container.sessionManager.stopPhoneAudioShare()
+        }
     }
 
     private fun startForegroundWith(title: String, text: String) {
@@ -74,12 +135,12 @@ class RideSessionService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK,
-            )
+            var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            if (projectionActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            }
+            startForeground(NOTIFICATION_ID, notification, types)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -154,8 +215,12 @@ class RideSessionService : Service() {
         const val CHANNEL_ID = "ride_session"
         const val NOTIFICATION_ID = 1001
         const val ACTION_STOP = "com.ridesync.app.STOP_SESSION"
+        const val ACTION_START_CAPTURE = "com.ridesync.app.START_CAPTURE"
+        const val ACTION_STOP_CAPTURE = "com.ridesync.app.STOP_CAPTURE"
         const val EXTRA_TITLE = "title"
         const val EXTRA_TEXT = "text"
+        const val EXTRA_RESULT_CODE = "result_code"
+        const val EXTRA_RESULT_DATA = "result_data"
         const val MAX_LOCK_MS = 6L * 60 * 60 * 1000 // safety cap: 6h
 
         fun start(context: Context, title: String, text: String) {
@@ -167,6 +232,26 @@ class RideSessionService : Service() {
             } else {
                 context.startService(intent)
             }
+        }
+
+        /** Kick off phone-audio sharing after the user grants the projection. */
+        fun startAudioCapture(context: Context, resultCode: Int, data: Intent, title: String) {
+            val intent = Intent(context, RideSessionService::class.java)
+                .setAction(ACTION_START_CAPTURE)
+                .putExtra(EXTRA_RESULT_CODE, resultCode)
+                .putExtra(EXTRA_RESULT_DATA, data)
+                .putExtra(EXTRA_TITLE, title)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        }
+
+        fun stopAudioCapture(context: Context) {
+            context.startService(
+                Intent(context, RideSessionService::class.java).setAction(ACTION_STOP_CAPTURE),
+            )
         }
 
         fun stop(context: Context) {

@@ -98,6 +98,8 @@ class HostServer(
     private val handlers = ConcurrentHashMap<String, ClientHandler>()
     private val nextKey = AtomicInteger(1)
     private val seq = AtomicLong(0)
+    private val hostVoiceSeq = AtomicInteger(0)
+    private val hostMediaSeq = AtomicInteger(0)
 
     // Private backing state (public mutation goes through setHostBattery /
     // setHostTalking, which also refresh the roster).
@@ -178,11 +180,40 @@ class HostServer(
     }
 
     /** Voice captured on the host device itself → all clients. */
-    fun relayVoiceFromHost(data: ByteArray, length: Int) {
+    /**
+     * The host's own captured voice. [payload] is the raw encoded audio, so it
+     * MUST be wrapped in a proper VoicePacket (with the host's reserved key 0)
+     * before sending — otherwise clients can't decode it and silently drop it.
+     */
+    fun relayVoiceFromHost(payload: ByteArray, length: Int, flags: Int) {
         val channel = voiceChannel ?: return
+        val packet = VoicePackets.encodeVoice(
+            senderKey = HOST_VOICE_KEY,
+            seq = hostVoiceSeq.getAndIncrement(),
+            flags = flags,
+            payload = payload,
+            length = length,
+        )
         for (handler in handlers.values) {
             val endpoint = handler.voiceEndpoint ?: continue
-            channel.send(data, length, endpoint)
+            channel.send(packet, packet.size, endpoint)
+        }
+    }
+
+    /** Stream one frame of the host's system/media audio to all clients as a
+     *  separate mixer stream (reserved key), so riders hear the host's music. */
+    fun relayMediaFromHost(payload: ByteArray, length: Int) {
+        val channel = voiceChannel ?: return
+        val packet = VoicePackets.encodeVoice(
+            senderKey = HOST_MEDIA_KEY,
+            seq = hostMediaSeq.getAndIncrement(),
+            flags = VoicePackets.FLAG_PCM,
+            payload = payload,
+            length = length,
+        )
+        for (handler in handlers.values) {
+            val endpoint = handler.voiceEndpoint ?: continue
+            channel.send(packet, packet.size, endpoint)
         }
     }
 
@@ -565,5 +596,9 @@ class HostServer(
         const val WATCHDOG_TICK_MS = 1000L
         const val RECONNECTING_AFTER_MS = 5000L
         const val DISCONNECTED_AFTER_MS = 30000L
+
+        /** Reserved mixer keys for the host's own streams. */
+        const val HOST_VOICE_KEY = 0
+        const val HOST_MEDIA_KEY = 200
     }
 }

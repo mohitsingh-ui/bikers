@@ -115,10 +115,19 @@ class BluetoothAudioManager(context: Context) {
      */
     fun startCommunicationMode(): Boolean {
         return try {
-            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
             val route = _route.value
             if (route.hasBluetoothMic && route.isBluetooth) {
+                // Only a Bluetooth headset WITH a mic needs the telephony (SCO)
+                // path, which requires MODE_IN_COMMUNICATION.
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 startBluetoothSco()
+            } else {
+                // Phone speaker / A2DP / wired: stay in NORMAL mode. Voice and
+                // music then play on the loudspeaker (or the A2DP headset) at
+                // full media volume, instead of being routed to the tiny
+                // earpiece with the media stream attenuated — which made voice
+                // nearly inaudible and music sound very low.
+                audioManager.mode = AudioManager.MODE_NORMAL
             }
             true
         } catch (e: Exception) {

@@ -171,6 +171,55 @@ fun EmergencyButton(onTriggered: () -> Unit) {
 }
 
 @Composable
+fun ShareAudioCard(sharing: Boolean, onToggle: () -> Unit) {
+    val colors = RideSyncTheme.colors
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (sharing) colors.accent.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surface)
+            .border(androidx.compose.foundation.BorderStroke(1.dp, if (sharing) colors.accent else colors.cardStroke), shape)
+            .clickable(onClick = onToggle)
+            .padding(Space.l),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                androidx.compose.material.icons.Icons.Filled.GraphicEq,
+                contentDescription = null,
+                tint = if (sharing) colors.accent else colors.mutedText,
+                modifier = Modifier.size(22.dp),
+            )
+            Spacer(Modifier.width(Space.m))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    if (sharing) "Sharing phone audio" else "Share phone audio",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    "Play this phone's audio on all riders' devices",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.mutedText,
+                )
+            }
+            Text(
+                if (sharing) "ON" else "OFF",
+                style = MaterialTheme.typography.labelLarge,
+                color = if (sharing) colors.accent else colors.faintText,
+                fontWeight = FontWeight.Bold,
+            )
+        }
+        Spacer(Modifier.height(Space.s))
+        Text(
+            "Note: YouTube Music and Spotify block audio capture, so they won't stream. Local music players and most other apps work.",
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.faintText,
+        )
+    }
+}
+
+@Composable
 fun RideModeCta(onOpenRideMode: () -> Unit) {
     val colors = RideSyncTheme.colors
     Row(

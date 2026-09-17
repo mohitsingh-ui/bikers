@@ -150,21 +150,28 @@ class VoiceEngine(
                 AudioFormat.ENCODING_PCM_16BIT,
             ).coerceAtLeast(VoiceFormat.FRAME_SAMPLES * 8)
 
-            val recorder = try {
-                AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            // Prefer VOICE_COMMUNICATION (built-in AEC/NS), but some devices
+            // fail to initialize it — fall back to the plain MIC source so
+            // capture still works rather than silently producing no audio.
+            fun openRecorder(source: Int): AudioRecord? = try {
+                @Suppress("MissingPermission")
+                val r = AudioRecord(
+                    source,
                     VoiceFormat.SAMPLE_RATE,
                     AudioFormat.CHANNEL_IN_MONO,
                     AudioFormat.ENCODING_PCM_16BIT,
                     minBuf,
                 )
+                if (r.state == AudioRecord.STATE_INITIALIZED) r else { r.release(); null }
             } catch (e: Exception) {
-                RLog.e(RLog.Cat.VOICE, "AudioRecord init failed", e)
-                return@thread
+                RLog.w(RLog.Cat.VOICE, "AudioRecord init failed for source $source", e)
+                null
             }
-            if (recorder.state != AudioRecord.STATE_INITIALIZED) {
-                RLog.e(RLog.Cat.VOICE, "AudioRecord not initialized")
-                recorder.release()
+
+            val recorder = openRecorder(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                ?: openRecorder(MediaRecorder.AudioSource.MIC)
+            if (recorder == null) {
+                RLog.e(RLog.Cat.VOICE, "AudioRecord could not be initialized (mic permission granted?)")
                 return@thread
             }
             record = recorder
@@ -264,8 +271,13 @@ class VoiceEngine(
             val audioTrack = try {
                 AudioTrack.Builder()
                     .setAudioAttributes(
+                        // Play voice on the MEDIA route (loudspeaker, or the
+                        // rider's A2DP headset — the same output as music) so it
+                        // is actually audible. USAGE_VOICE_COMMUNICATION would
+                        // route to the earpiece, which is why voice seemed to
+                        // "not come through" on the phone speaker.
                         AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
                             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                             .build(),
                     )

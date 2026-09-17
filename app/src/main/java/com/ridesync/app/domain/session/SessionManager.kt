@@ -120,6 +120,20 @@ class SessionManager(
         return sim
     }
 
+    // --------------------------------------------------- phone audio sharing
+
+    /** Start streaming the host phone's audio output to riders. Host only. */
+    fun startPhoneAudioShare(projection: android.media.projection.MediaProjection): Boolean {
+        val host = _active.value as? HostSession ?: return false
+        return host.startMediaShare(projection)
+    }
+
+    fun stopPhoneAudioShare() {
+        (_active.value as? HostSession)?.stopMediaShare()
+    }
+
+    val isHosting: Boolean get() = _active.value is HostSession
+
     // ------------------------------------------------------------- lifecycle
 
     fun stopActive() {

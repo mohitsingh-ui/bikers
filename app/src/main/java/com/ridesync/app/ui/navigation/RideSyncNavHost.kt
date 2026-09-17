@@ -228,6 +228,10 @@ fun RideSyncNavHost(
                         onEmergency = { activeSession?.triggerEmergency() },
                         onOpenVoiceMix = { navController.navigate(Routes.VOICE_MIX) },
                         onOpenRideMode = { activeSession?.setRideMode(true) },
+                        onToggleShareAudio = {
+                            if (state.phoneAudioSharing) viewModel.stopPhoneAudioShare()
+                            else viewModel.requestPhoneAudioShare()
+                        },
                         onStartRide = { activeSession?.startRide() },
                         onEndRide = { activeSession?.endRide() },
                     )
