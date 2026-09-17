@@ -184,12 +184,12 @@ class HostServer(
         }
     }
 
-    fun setHostTalking(talking: Boolean) {
+    fun updateHostTalking(talking: Boolean) {
         hostTalking = talking
         notifyRoster()
     }
 
-    fun setHostBattery(percent: Int?) {
+    fun updateHostBattery(percent: Int?) {
         if (percent != hostBattery) {
             hostBattery = percent
             notifyRoster()
