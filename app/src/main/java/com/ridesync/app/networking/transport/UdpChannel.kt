@@ -71,8 +71,9 @@ class UdpChannel(bindPort: Int = 0, enableBroadcast: Boolean = false) {
                     return@Thread
                 } catch (e: IOException) {
                     if (!closed) RLog.d(RLog.Cat.NETWORK, "udp recv error: ${e.message}")
-                } catch (e: Exception) {
-                    // A handler bug must not kill the receive loop.
+                } catch (e: Throwable) {
+                    // A handler bug (or anything else) must never kill the loop
+                    // or crash the process — log and keep receiving.
                     RLog.e(RLog.Cat.NETWORK, "udp handler error", e)
                 }
             }

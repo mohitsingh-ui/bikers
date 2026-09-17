@@ -194,17 +194,22 @@ class HostSession(
     }
 
     override fun sendQuickAlert(kind: QuickAlertKind) {
-        server.broadcast(QuickAlertMsg(kind.name, config().hostName))
-        if (env.settings.spokenAlerts) env.tones.alert()
-        env.haptics.alert()
-        _events.tryEmit(SessionEvent.QuickAlertReceived(kind, config().hostName))
+        runCatching {
+            server.broadcast(QuickAlertMsg(kind.name, config().hostName))
+            if (env.settings.spokenAlerts) env.tones.alert()
+            env.announcer.announceOwnAlert(kind)
+            env.haptics.alert()
+            _events.tryEmit(SessionEvent.QuickAlertReceived(kind, config().hostName))
+        }.onFailure { RLog.e(RLog.Cat.SESSION, "sendQuickAlert failed", it) }
     }
 
     override fun triggerEmergency() {
-        val loc = null // location wired in service layer when enabled
-        server.broadcast(Emergency(config().hostName, System.currentTimeMillis()))
-        env.haptics.emergency(); env.tones.emergency()
-        _events.tryEmit(SessionEvent.EmergencyReceived(config().hostName, System.currentTimeMillis()))
+        runCatching {
+            server.broadcast(Emergency(config().hostName, System.currentTimeMillis()))
+            env.haptics.emergency(); env.tones.emergency()
+            env.announcer.announceEmergency(config().hostName)
+            _events.tryEmit(SessionEvent.EmergencyReceived(config().hostName, System.currentTimeMillis()))
+        }.onFailure { RLog.e(RLog.Cat.SESSION, "triggerEmergency failed", it) }
     }
 
     override fun setRideMode(active: Boolean) {
@@ -288,21 +293,23 @@ class HostSession(
                 is MusicCommand -> handleClientMusicCommand(message)
                 is VoiceStart -> onSpeakingChanged()
                 is VoiceStop -> onSpeakingChanged()
-                is QuickAlertMsg -> {
-                    val kind = runCatching { QuickAlertKind.valueOf(message.kind) }.getOrNull() ?: return
+                is QuickAlertMsg -> runCatching {
+                    val kind = QuickAlertKind.valueOf(message.kind)
                     if (env.settings.spokenAlerts) env.tones.alert()
+                    env.announcer.announceAlert(kind, message.riderName)
                     env.haptics.alert()
                     _events.tryEmit(SessionEvent.QuickAlertReceived(kind, message.riderName))
-                }
+                }.onFailure { RLog.w(RLog.Cat.SESSION, "handle alert failed", it) }.let {}
 
-                is Emergency -> {
+                is Emergency -> runCatching {
                     env.haptics.emergency(); env.tones.emergency()
+                    env.announcer.announceEmergency(message.riderName)
                     _events.tryEmit(
                         SessionEvent.EmergencyReceived(
                             message.riderName, message.atMs, message.latitude, message.longitude,
                         ),
                     )
-                }
+                }.onFailure { RLog.w(RLog.Cat.SESSION, "handle emergency failed", it) }.let {}
 
                 else -> Unit
             }

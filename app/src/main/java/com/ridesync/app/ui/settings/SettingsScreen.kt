@@ -17,6 +17,7 @@ import com.ridesync.app.data.preferences.Settings
 import com.ridesync.app.data.preferences.SettingsRepository
 import com.ridesync.app.data.preferences.VoiceCodecChoice
 import com.ridesync.app.domain.model.CommMode
+import com.ridesync.app.license.LicenseState
 import com.ridesync.app.ui.components.RideScaffold
 import com.ridesync.app.ui.components.Space
 import com.ridesync.app.ui.theme.RideSyncTheme
@@ -28,6 +29,9 @@ fun SettingsScreen(
     settings: Settings,
     repo: SettingsRepository,
     scope: CoroutineScope,
+    license: LicenseState,
+    onOpenSubscription: () -> Unit,
+    onSendDiagnostics: () -> Unit,
     onBack: () -> Unit,
 ) {
     val colors = RideSyncTheme.colors
@@ -40,6 +44,17 @@ fun SettingsScreen(
                 .padding(horizontal = Space.l),
         ) {
             Spacer(Modifier.height(Space.s))
+
+            // SUBSCRIPTION — the rider limit lives here now
+            SettingsGroup("Subscription") {
+                NavRow(
+                    title = "Your plan",
+                    subtitle = "${license.effectiveTier.displayName} · up to ${license.maxRiders} riders" +
+                        if (license.effectiveStatus == LicenseState.Status.EXPIRED) " · renew to restore" else "",
+                    value = if (license.effectiveTier.isPaid) null else "Upgrade",
+                    onClick = onOpenSubscription,
+                )
+            }
 
             // COMMUNICATION
             SettingsGroup("Communication") {
@@ -98,11 +113,11 @@ fun SettingsScreen(
 
             // RIDE
             SettingsGroup("Ride") {
-                ChoiceRow(
+                NavRow(
                     title = "Maximum riders",
-                    options = listOf("4", "6", "8"),
-                    selectedIndex = when (settings.maxRiders) { 6 -> 1; 8 -> 2; else -> 0 },
-                    onSelect = { launch { repo.setMaxRiders(when (it) { 1 -> 6; 2 -> 8; else -> 4 }) } },
+                    subtitle = "Set by your plan — tap to change",
+                    value = "${license.maxRiders}",
+                    onClick = onOpenSubscription,
                 )
                 ToggleRow("Host migration", "Elect a new host if the host drops", settings.hostMigrationEnabled) {
                     launch { repo.setHostMigrationEnabled(it) }
@@ -123,7 +138,7 @@ fun SettingsScreen(
                 ToggleRow("Quick alerts", "One-tap group signals", settings.quickAlertsEnabled) {
                     launch { repo.setQuickAlertsEnabled(it) }
                 }
-                ToggleRow("Spoken alert tones", "Play a tone with alerts", settings.spokenAlerts) {
+                ToggleRow("Spoken voice alerts", "Say each alert out loud, e.g. “Slow down, from Ravi”", settings.spokenAlerts) {
                     launch { repo.setSpokenAlerts(it) }
                 }
                 ToggleRow("Haptic feedback", checked = settings.hapticsEnabled) {
@@ -144,6 +159,15 @@ fun SettingsScreen(
                     options = listOf("Ember", "Amber", "Cobalt"),
                     selectedIndex = when (settings.accent) { AccentChoice.EMBER -> 0; AccentChoice.AMBER -> 1; AccentChoice.COBALT -> 2 },
                     onSelect = { launch { repo.setAccent(when (it) { 1 -> AccentChoice.AMBER; 2 -> AccentChoice.COBALT; else -> AccentChoice.EMBER }) } },
+                )
+            }
+
+            // DIAGNOSTICS
+            SettingsGroup("Diagnostics") {
+                NavRow(
+                    title = "Send diagnostics report",
+                    subtitle = "Share recent logs and any crash report to help fix issues",
+                    onClick = onSendDiagnostics,
                 )
             }
 

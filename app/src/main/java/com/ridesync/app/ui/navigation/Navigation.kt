@@ -13,6 +13,7 @@ object Routes {
     const val RIDE = "ride"
     const val VOICE_MIX = "voice_mix"
     const val SETTINGS = "settings"
+    const val SUBSCRIPTION = "subscription"
     const val SUMMARY = "summary"
     const val DEV_MODE = "dev_mode"
 

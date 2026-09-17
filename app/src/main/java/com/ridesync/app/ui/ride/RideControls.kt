@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.LibraryMusic
-import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -49,57 +49,78 @@ import com.ridesync.app.ui.components.Space
 import com.ridesync.app.ui.theme.RideSyncTheme
 import kotlinx.coroutines.delay
 
-/** Push-to-Talk / Open Intercom segmented toggle. */
+/**
+ * Two clear voice modes: Push-to-Talk (hold the big button to speak) and
+ * Always On (hands-free — your mic is always live for the group). Tap a card to
+ * switch.
+ */
 @Composable
 fun CommModeToggle(mode: CommMode, onToggle: () -> Unit) {
     val colors = RideSyncTheme.colors
-    RideCard(modifier = Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.RecordVoiceOver, contentDescription = null, tint = colors.accent, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(Space.m))
-            Column(Modifier.weight(1f)) {
-                Text("Communication mode", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-                Text(
-                    if (mode == CommMode.PUSH_TO_TALK) "Push-to-Talk" else "Open Intercom (always live)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.mutedText,
-                )
-            }
-            SegPill(
-                leftLabel = "PTT",
-                rightLabel = "Open",
-                rightSelected = mode == CommMode.OPEN_INTERCOM,
-                onClick = onToggle,
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            "VOICE MODE",
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.mutedText,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(Space.s))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(Space.s)) {
+            VoiceModeCard(
+                emoji = "🎙️",
+                title = "Push to talk",
+                subtitle = "Hold to speak",
+                selected = mode == CommMode.PUSH_TO_TALK,
+                color = colors.accent,
+                onClick = { if (mode != CommMode.PUSH_TO_TALK) onToggle() },
+                modifier = Modifier.weight(1f),
+            )
+            VoiceModeCard(
+                emoji = "📢",
+                title = "Always on",
+                subtitle = "Hands-free",
+                selected = mode == CommMode.OPEN_INTERCOM,
+                color = Color(0xFF34D399),
+                onClick = { if (mode != CommMode.OPEN_INTERCOM) onToggle() },
+                modifier = Modifier.weight(1f),
             )
         }
     }
 }
 
 @Composable
-private fun SegPill(leftLabel: String, rightLabel: String, rightSelected: Boolean, onClick: () -> Unit) {
+private fun VoiceModeCard(
+    emoji: String,
+    title: String,
+    subtitle: String,
+    selected: Boolean,
+    color: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val colors = RideSyncTheme.colors
-    Row(
-        Modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier
+            .clip(shape)
+            .background(if (selected) color.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface)
+            .border(
+                androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) color else colors.cardStroke),
+                shape,
+            )
             .clickable(onClick = onClick)
-            .padding(3.dp),
+            .padding(Space.m),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        listOf(leftLabel to !rightSelected, rightLabel to rightSelected).forEach { (label, selected) ->
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(50))
-                    .background(if (selected) colors.accent else Color.Transparent)
-                    .padding(horizontal = Space.m, vertical = 6.dp),
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) Color(0xFF1A0E00) else colors.mutedText,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
+        Text(emoji, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (selected) color else MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Bold,
+        )
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.mutedText)
     }
 }
 

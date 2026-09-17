@@ -37,31 +37,36 @@ class RideSessionService : Service() {
     private var projectionActive = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopSelfSafely()
-                return START_NOT_STICKY
-            }
+        // Defensive: nothing in here should be able to crash the app.
+        try {
+            when (intent?.action) {
+                ACTION_STOP -> {
+                    stopSelfSafely()
+                    return START_NOT_STICKY
+                }
 
-            ACTION_START_CAPTURE -> {
-                startAudioCapture(intent)
-            }
+                ACTION_START_CAPTURE -> {
+                    startAudioCapture(intent)
+                }
 
-            ACTION_STOP_CAPTURE -> {
-                projectionActive = false
-                stopAudioCaptureShare()
-                startForegroundWith(
-                    intent?.getStringExtra(EXTRA_TITLE) ?: "RideSync",
-                    intent?.getStringExtra(EXTRA_TEXT) ?: "Ride in progress",
-                )
-            }
+                ACTION_STOP_CAPTURE -> {
+                    projectionActive = false
+                    stopAudioCaptureShare()
+                    startForegroundWith(
+                        intent?.getStringExtra(EXTRA_TITLE) ?: "RideSync",
+                        intent?.getStringExtra(EXTRA_TEXT) ?: "Ride in progress",
+                    )
+                }
 
-            else -> {
-                val title = intent?.getStringExtra(EXTRA_TITLE) ?: "RideSync"
-                val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Ride in progress"
-                startForegroundWith(title, text)
-                acquireLocks()
+                else -> {
+                    val title = intent?.getStringExtra(EXTRA_TITLE) ?: "RideSync"
+                    val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Ride in progress"
+                    startForegroundWith(title, text)
+                    acquireLocks()
+                }
             }
+        } catch (e: Throwable) {
+            RLog.e(RLog.Cat.SESSION, "onStartCommand failed", e)
         }
         return START_STICKY
     }
@@ -134,15 +139,27 @@ class RideSessionService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-            if (projectionActive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+        // startForeground can throw on modern Android: a background start may be
+        // refused (Android 12+), and a typed FGS is refused if the matching
+        // permission isn't granted yet — e.g. the MICROPHONE type before the
+        // user has allowed the mic (Android 14+). None of that should crash the
+        // app: fall back to a plain foreground notification, and if even that
+        // fails, log and carry on.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                if (projectionActive) {
+                    types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                }
+                startForeground(NOTIFICATION_ID, notification, types)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
             }
-            startForeground(NOTIFICATION_ID, notification, types)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        } catch (e: Throwable) {
+            RLog.e(RLog.Cat.SESSION, "startForeground failed; retrying untyped", e)
+            runCatching { startForeground(NOTIFICATION_ID, notification) }
+                .onFailure { RLog.e(RLog.Cat.SESSION, "untyped startForeground also failed", it) }
         }
     }
 
@@ -223,15 +240,14 @@ class RideSessionService : Service() {
         const val EXTRA_RESULT_DATA = "result_data"
         const val MAX_LOCK_MS = 6L * 60 * 60 * 1000 // safety cap: 6h
 
+        // Starting a service can throw on modern Android (background-start
+        // limits on 12+, etc.). These helpers must never throw to the caller —
+        // a foreground-service hiccup should not close the app.
         fun start(context: Context, title: String, text: String) {
             val intent = Intent(context, RideSessionService::class.java)
                 .putExtra(EXTRA_TITLE, title)
                 .putExtra(EXTRA_TEXT, text)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            safeStart(context, intent, foreground = true)
         }
 
         /** Kick off phone-audio sharing after the user grants the projection. */
@@ -241,23 +257,27 @@ class RideSessionService : Service() {
                 .putExtra(EXTRA_RESULT_CODE, resultCode)
                 .putExtra(EXTRA_RESULT_DATA, data)
                 .putExtra(EXTRA_TITLE, title)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            safeStart(context, intent, foreground = true)
         }
 
         fun stopAudioCapture(context: Context) {
-            context.startService(
-                Intent(context, RideSessionService::class.java).setAction(ACTION_STOP_CAPTURE),
-            )
+            safeStart(context, Intent(context, RideSessionService::class.java).setAction(ACTION_STOP_CAPTURE), foreground = false)
         }
 
         fun stop(context: Context) {
-            context.startService(
-                Intent(context, RideSessionService::class.java).setAction(ACTION_STOP),
-            )
+            safeStart(context, Intent(context, RideSessionService::class.java).setAction(ACTION_STOP), foreground = false)
+        }
+
+        private fun safeStart(context: Context, intent: Intent, foreground: Boolean) {
+            try {
+                if (foreground && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+            } catch (e: Throwable) {
+                RLog.e(RLog.Cat.SESSION, "service start failed (${intent.action ?: "start"})", e)
+            }
         }
     }
 }

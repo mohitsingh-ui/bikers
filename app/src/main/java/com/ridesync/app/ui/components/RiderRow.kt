@@ -1,7 +1,6 @@
 package com.ridesync.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.ridesync.app.domain.model.Rider
 import com.ridesync.app.domain.model.RiderState
+import com.ridesync.app.ui.theme.RidePalette
 import com.ridesync.app.ui.theme.RideSyncTheme
 
 /**
@@ -87,24 +87,26 @@ fun RiderRow(
 
 @Composable
 private fun RiderAvatar(rider: Rider, talking: Boolean) {
-    val colors = RideSyncTheme.colors
-    val scale by animateFloatAsState(if (talking) 1f else 0.98f, label = "avatarScale")
+    // Each rider gets their own stable colour, so the roster is lively and it's
+    // easy to tell people apart at a glance.
+    val riderColor = RidePalette.forRider(rider.id.ifEmpty { rider.name })
     Box(contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(if (rider.isHost) colors.accent.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant),
+                .background(riderColor.copy(alpha = if (talking) 0.30f else 0.20f))
+                .border(BorderStroke(2.dp, riderColor.copy(alpha = if (talking) 0.9f else 0.5f)), CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             if (talking) {
-                Icon(Icons.Filled.Mic, contentDescription = "Talking", tint = colors.accent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.Mic, contentDescription = "Talking", tint = riderColor, modifier = Modifier.size(20.dp))
             } else {
                 Text(
                     rider.name.take(1).uppercase(),
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
-                    color = if (rider.isHost) colors.accent else MaterialTheme.colorScheme.onSurface,
+                    color = riderColor,
                 )
             }
         }

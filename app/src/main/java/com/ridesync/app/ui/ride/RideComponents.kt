@@ -38,6 +38,7 @@ import com.ridesync.app.domain.model.QuickAlertKind
 import com.ridesync.app.ui.components.MeterBar
 import com.ridesync.app.ui.components.RideCard
 import com.ridesync.app.ui.components.Space
+import com.ridesync.app.ui.theme.RidePalette
 import com.ridesync.app.ui.theme.RideSyncTheme
 
 /** "● N RIDERS CONNECTED" banner. */
@@ -129,22 +130,29 @@ fun QuickAlertsRow(onAlert: (QuickAlertKind) -> Unit, modifier: Modifier = Modif
 
 @Composable
 fun QuickAlertChip(kind: QuickAlertKind, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = RideSyncTheme.colors
+    val shape = RoundedCornerShape(14.dp)
+    val color = RidePalette.forAlert(kind)
     Column(
         modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(androidx.compose.foundation.BorderStroke(1.dp, colors.cardStroke), RoundedCornerShape(14.dp))
+            .clip(shape)
+            .background(color.copy(alpha = 0.12f))
+            .border(androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.55f)), shape)
             .clickable(onClick = onClick)
             .padding(vertical = Space.m),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(kind.emoji, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(4.dp))
+        Box(
+            Modifier.size(34.dp).clip(CircleShape).background(color.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(kind.emoji, fontSize = 17.sp)
+        }
+        Spacer(Modifier.height(5.dp))
         Text(
             alertLabel(kind),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.SemiBold,
         )
     }
 }

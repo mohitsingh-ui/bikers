@@ -113,14 +113,15 @@ fun SecondaryButton(
     }
 }
 
-/** Section label in the muted, tracked style used across screens. */
+/** Section label — tinted with the accent so screens feel colorful and lively. */
 @Composable
 fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text.uppercase(),
         style = MaterialTheme.typography.labelMedium,
-        color = RideSyncTheme.colors.mutedText,
+        color = RideSyncTheme.colors.accent,
         letterSpacing = 1.2.sp,
+        fontWeight = FontWeight.Bold,
         modifier = modifier,
     )
 }

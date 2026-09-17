@@ -4,6 +4,7 @@ import android.content.Context
 import com.ridesync.app.audio.BluetoothAudioManager
 import com.ridesync.app.audio.DuckingController
 import com.ridesync.app.audio.Haptics
+import com.ridesync.app.audio.SpeechAnnouncer
 import com.ridesync.app.audio.Tones
 import com.ridesync.app.audio.VoiceEngine
 import com.ridesync.app.core.BatteryReader
@@ -11,6 +12,7 @@ import com.ridesync.app.data.preferences.ProfileRepository
 import com.ridesync.app.data.preferences.RecentRidesRepository
 import com.ridesync.app.data.preferences.Settings
 import com.ridesync.app.data.preferences.SettingsRepository
+import com.ridesync.app.license.LicenseManager
 import com.ridesync.app.music.MusicController
 import com.ridesync.app.networking.ClockSync
 import com.ridesync.app.networking.NetworkMonitor
@@ -25,11 +27,13 @@ class SessionEnvironment(
     val settingsRepository: SettingsRepository,
     val profileRepository: ProfileRepository,
     val recentRidesRepository: RecentRidesRepository,
+    val licenseManager: LicenseManager,
 ) {
     val networkMonitor = NetworkMonitor(appContext)
     val bluetooth = BluetoothAudioManager(appContext)
     val haptics = Haptics(appContext)
     val tones = Tones()
+    val announcer = SpeechAnnouncer(appContext)
     val battery = BatteryReader(appContext)
     val ducking = DuckingController()
     val clock = ClockSync()

@@ -24,7 +24,13 @@ import kotlinx.coroutines.launch
 class SessionManager(
     private val env: SessionEnvironment,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.Default)
+    // A failing session/network coroutine must log, not crash the app.
+    private val errorHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        RLog.e(RLog.Cat.SESSION, "session coroutine failed", e)
+    }
+    private val scope = CoroutineScope(
+        SupervisorJob() + kotlinx.coroutines.Dispatchers.Default + errorHandler,
+    )
 
     private val _active = MutableStateFlow<RideSession?>(null)
     val active: StateFlow<RideSession?> = _active
@@ -35,6 +41,7 @@ class SessionManager(
         scope.launch {
             env.settingsRepository.settings.collect { s ->
                 env.settings = s
+                env.announcer.enabled = s.spokenAlerts
                 applyLiveSettings(s)
             }
         }
@@ -50,7 +57,9 @@ class SessionManager(
             name = rideName.ifBlank { "Group Ride" },
             hostName = hostName.ifBlank { "Host" },
             pin = RideCodes.generatePin(),
-            maxRiders = settings.maxRiders,
+            // Ride capacity comes from the host's subscription (Free = 4, up to
+            // Fleet = 50), not a free setting. See LicenseManager.
+            maxRiders = env.licenseManager.maxRiders,
             hostOnlyMusic = settings.hostOnlyMusic,
         )
         val host = HostSession(scope, env, hostRiderIdBlocking(), config)
@@ -99,7 +108,7 @@ class SessionManager(
             name = rideName,
             hostName = hostName,
             pin = pin,
-            maxRiders = env.settings.maxRiders,
+            maxRiders = env.licenseManager.maxRiders,
             hostOnlyMusic = env.settings.hostOnlyMusic,
         )
         val host = HostSession(scope, env, hostRiderIdBlocking(), config)

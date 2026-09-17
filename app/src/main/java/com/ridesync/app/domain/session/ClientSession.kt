@@ -154,16 +154,24 @@ class ClientSession(
     }
 
     override fun sendQuickAlert(kind: QuickAlertKind) {
-        connection.sendControl(QuickAlertMsg(kind.name, riderName))
-        if (env.settings.spokenAlerts) env.tones.alert()
-        env.haptics.alert()
-        _events.tryEmit(SessionEvent.QuickAlertReceived(kind, riderName))
+        // The whole path is guarded so a tone/speech/haptic hiccup on any device
+        // can never force-close the app.
+        runCatching {
+            connection.sendControl(QuickAlertMsg(kind.name, riderName))
+            if (env.settings.spokenAlerts) env.tones.alert()
+            env.announcer.announceOwnAlert(kind)
+            env.haptics.alert()
+            _events.tryEmit(SessionEvent.QuickAlertReceived(kind, riderName))
+        }.onFailure { RLog.e(RLog.Cat.SESSION, "sendQuickAlert failed", it) }
     }
 
     override fun triggerEmergency() {
-        connection.sendControl(Emergency(riderName, System.currentTimeMillis()))
-        env.haptics.emergency(); env.tones.emergency()
-        _events.tryEmit(SessionEvent.EmergencyReceived(riderName, System.currentTimeMillis()))
+        runCatching {
+            connection.sendControl(Emergency(riderName, System.currentTimeMillis()))
+            env.haptics.emergency(); env.tones.emergency()
+            env.announcer.announceEmergency(riderName)
+            _events.tryEmit(SessionEvent.EmergencyReceived(riderName, System.currentTimeMillis()))
+        }.onFailure { RLog.e(RLog.Cat.SESSION, "triggerEmergency failed", it) }
     }
 
     override fun setRideMode(active: Boolean) {
@@ -254,19 +262,21 @@ class ClientSession(
 
             is VoiceStop -> markTalking(message.riderKey, false, null)
 
-            is QuickAlertMsg -> {
-                val kind = runCatching { QuickAlertKind.valueOf(message.kind) }.getOrNull() ?: return
+            is QuickAlertMsg -> runCatching {
+                val kind = QuickAlertKind.valueOf(message.kind)
                 if (env.settings.spokenAlerts) env.tones.alert()
+                env.announcer.announceAlert(kind, message.riderName)
                 env.haptics.alert()
                 _events.tryEmit(SessionEvent.QuickAlertReceived(kind, message.riderName))
-            }
+            }.onFailure { RLog.w(RLog.Cat.SESSION, "handle alert failed", it) }.let {}
 
-            is Emergency -> {
+            is Emergency -> runCatching {
                 env.haptics.emergency(); env.tones.emergency()
+                env.announcer.announceEmergency(message.riderName)
                 _events.tryEmit(
                     SessionEvent.EmergencyReceived(message.riderName, message.atMs, message.latitude, message.longitude),
                 )
-            }
+            }.onFailure { RLog.w(RLog.Cat.SESSION, "handle emergency failed", it) }.let {}
 
             is RideStarted -> {
                 _state.value = _state.value.copy(phase = RidePhase.RIDING)

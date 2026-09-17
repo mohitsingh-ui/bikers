@@ -40,11 +40,13 @@ import com.ridesync.app.ui.home.HomeScreen
 import com.ridesync.app.ui.joinride.JoinRideScreen
 import com.ridesync.app.ui.joinride.RiderSetupScreen
 import com.ridesync.app.ui.onboarding.OnboardingScreen
+import com.ridesync.app.ui.components.ConfettiOverlay
 import com.ridesync.app.ui.ride.EmergencyOverlay
 import com.ridesync.app.ui.ride.RideModeScreen
 import com.ridesync.app.ui.ride.RideScreen
 import com.ridesync.app.ui.ride.VoiceMixScreen
 import com.ridesync.app.ui.settings.SettingsScreen
+import com.ridesync.app.ui.subscription.SubscriptionScreen
 import com.ridesync.app.ui.summary.SummaryScreen
 
 /**
@@ -68,10 +70,17 @@ fun RideSyncNavHost(
     val recentRides by viewModel.recentRides.collectAsState()
     val activeSession by viewModel.activeSession.collectAsState()
     val rideState by viewModel.rideState.collectAsState()
+    val licenseState by viewModel.licenseState.collectAsState()
 
     var lastSummary by remember { mutableStateOf<RideSummary?>(null) }
     var emergencyBanner by remember { mutableStateOf<String?>(null) }
     var musicMutedLocal by remember { mutableStateOf(false) }
+
+    // Fire a celebratory confetti burst whenever a ride starts.
+    var confettiTrigger by remember { mutableStateOf(0) }
+    LaunchedEffect(rideState?.phase) {
+        if (rideState?.phase == com.ridesync.app.domain.model.RidePhase.RIDING) confettiTrigger++
+    }
 
     // Route session events to snackbar / summary / emergency banner.
     SessionEventEffects(
@@ -119,9 +128,12 @@ fun RideSyncNavHost(
                 HomeScreen(
                     riderName = riderName,
                     recentRides = recentRides,
+                    planLabel = "${licenseState.effectiveTier.displayName} · up to ${licenseState.maxRiders} riders",
+                    canUpgrade = !licenseState.effectiveTier.isPaid,
                     onCreateRide = { navController.navigate(Routes.CREATE_RIDE) },
                     onJoinRide = { navController.navigate(Routes.JOIN_RIDE) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
+                    onSubscription = { navController.navigate(Routes.SUBSCRIPTION) },
                     onDevMode = { navController.navigate(Routes.DEV_MODE) },
                 )
             }
@@ -275,7 +287,53 @@ fun RideSyncNavHost(
                     settings = settings,
                     repo = viewModel.settingsRepository,
                     scope = scope,
+                    license = licenseState,
+                    onOpenSubscription = { navController.navigate(Routes.SUBSCRIPTION) },
+                    onSendDiagnostics = {
+                        runCatching {
+                            val crash = com.ridesync.app.core.CrashGuard.latestReport(context)
+                            val report = buildString {
+                                appendLine("RideSync diagnostics")
+                                appendLine("app: ${context.packageName}")
+                                appendLine("android: ${android.os.Build.VERSION.SDK_INT} (${android.os.Build.MODEL})")
+                                appendLine()
+                                if (crash != null) {
+                                    appendLine("=== last crash ===")
+                                    appendLine(crash)
+                                    appendLine()
+                                }
+                                appendLine("=== recent logs ===")
+                                com.ridesync.app.core.RLog.recent().takeLast(150).forEach { appendLine(it) }
+                            }
+                            val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "RideSync diagnostics")
+                                putExtra(android.content.Intent.EXTRA_TEXT, report)
+                            }
+                            context.startActivity(android.content.Intent.createChooser(send, "Send diagnostics"))
+                        }
+                    },
                     onBack = { navController.popBackStack() },
+                )
+            }
+
+            composable(Routes.SUBSCRIPTION) {
+                SubscriptionScreen(
+                    license = licenseState,
+                    onBack = { navController.popBackStack() },
+                    onActivate = { key -> viewModel.activateLicense(key) },
+                    onRefresh = { viewModel.refreshLicense() },
+                    onSignOut = { viewModel.signOutLicense() },
+                    onManageOnline = {
+                        runCatching {
+                            context.startActivity(
+                                android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(com.ridesync.app.license.LicenseConfig.MANAGE_URL),
+                                ),
+                            )
+                        }
+                    },
                 )
             }
 
@@ -307,6 +365,8 @@ fun RideSyncNavHost(
         emergencyBanner?.let { message ->
             EmergencyOverlay(message = message, onDismiss = { emergencyBanner = null }, modifier = Modifier.align(Alignment.TopCenter))
         }
+
+        ConfettiOverlay(trigger = confettiTrigger, modifier = Modifier.fillMaxSize())
 
         SnackbarHost(hostState = snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp))
     }

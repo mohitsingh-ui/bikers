@@ -31,6 +31,14 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
     private val sessionManager = container.sessionManager
     private val env = container.environment
 
+    // Any UI-triggered coroutine that throws must log, never crash the app.
+    private val vmErrorHandler = kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        com.ridesync.app.core.RLog.e(com.ridesync.app.core.RLog.Cat.UI, "ui coroutine failed", e)
+    }
+
+    private fun launchSafe(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) =
+        viewModelScope.launch(vmErrorHandler, block = block)
+
     val activeSession: StateFlow<RideSession?> = sessionManager.active
 
     val settings: StateFlow<Settings> = container.settingsRepository.settings
@@ -77,7 +85,7 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
     // Session lifecycle -------------------------------------------------------
 
     fun createRide(rideName: String, hostName: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
+        launchSafe {
             if (hostName.isNotBlank()) container.profileRepository.setRiderName(hostName)
             val host = sessionManager.createHost(rideName, hostName)
             onResult(host != null)
@@ -85,7 +93,7 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun joinDiscovered(ride: DiscoveredRide, riderName: String, pin: String) {
-        viewModelScope.launch {
+        launchSafe {
             if (riderName.isNotBlank()) container.profileRepository.setRiderName(riderName)
             sessionManager.joinRide(
                 HostEndpoint(
@@ -101,14 +109,14 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun joinByPin(host: String, port: Int, pin: String, rideId: String, riderName: String) {
-        viewModelScope.launch {
+        launchSafe {
             if (riderName.isNotBlank()) container.profileRepository.setRiderName(riderName)
             sessionManager.joinByPin(host, port, pin, rideId, riderName)
         }
     }
 
     fun startSimulation(riderNames: List<String>) {
-        viewModelScope.launch {
+        launchSafe {
             val me = riderName.value.ifBlank { "You" }
             sessionManager.startSimulation(me, riderNames)
         }
@@ -120,11 +128,24 @@ class RideSyncViewModel(private val container: AppContainer) : ViewModel() {
 
     // Settings mutators (delegated) ------------------------------------------
 
-    fun setCommMode(mode: CommMode) = viewModelScope.launch { container.settingsRepository.setCommMode(mode) }
-    fun setRiderName(name: String) = viewModelScope.launch { container.profileRepository.setRiderName(name) }
-    fun completeOnboarding() = viewModelScope.launch { container.profileRepository.setOnboardingDone() }
+    fun setCommMode(mode: CommMode) = launchSafe { container.settingsRepository.setCommMode(mode) }
+    fun setRiderName(name: String) = launchSafe { container.profileRepository.setRiderName(name) }
+    fun completeOnboarding() = launchSafe { container.profileRepository.setOnboardingDone() }
 
     val settingsRepository get() = container.settingsRepository
+
+    // Licensing / subscription -----------------------------------------------
+
+    val licenseState: StateFlow<com.ridesync.app.license.LicenseState> = container.licenseManager.state
+
+    /** Activate a pasted license key; [onResult] gets true on success. */
+    fun activateLicense(key: String, onResult: (Boolean) -> Unit = {}) = launchSafe {
+        onResult(container.licenseManager.activate(key))
+    }
+
+    fun refreshLicense() = launchSafe { container.licenseManager.refresh(force = true) }
+
+    fun signOutLicense() = launchSafe { container.licenseManager.signOut() }
 
     fun refreshAudioRoute() {
         env.bluetooth.refresh()

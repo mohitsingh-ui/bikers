@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -65,6 +68,36 @@ fun ToggleRow(
                 checkedTrackColor = colors.accent,
             ),
         )
+    }
+}
+
+/** A tappable row that navigates elsewhere (e.g. to the Subscription screen). */
+@Composable
+fun NavRow(
+    title: String,
+    subtitle: String? = null,
+    value: String? = null,
+    onClick: () -> Unit,
+) {
+    val colors = RideSyncTheme.colors
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = Space.m, vertical = Space.m),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
+            if (subtitle != null) {
+                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.mutedText)
+            }
+        }
+        if (value != null) {
+            Text(value, style = MaterialTheme.typography.labelLarge, color = colors.accent)
+            Spacer(Modifier.width(Space.s))
+        }
+        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = colors.faintText)
     }
 }
 
