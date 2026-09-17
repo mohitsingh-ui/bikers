@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Window/system colors. The full palette lives in ui/theme/Color.kt -->
-    <color name="ridesync_background">#0D0F13</color>
-    <color name="ridesync_accent">#FF7A1F</color>
-    <color name="ridesync_on_background">#F4F5F7</color>
-</resources>
